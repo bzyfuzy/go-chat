@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -15,7 +16,36 @@ var (
 	listeningPort = "9000"                    // Default port
 )
 
-// Start a TCP server to accept incoming connections
+// Get the local IP address of the machine
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "Unknown"
+	}
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+			return ipNet.IP.String()
+		}
+	}
+	return "Unknown"
+}
+
+// Get the public IP address
+func getPublicIP() string {
+	resp, err := http.Get("https://api64.ipify.org?format=text")
+	if err != nil {
+		return "Unknown"
+	}
+	defer resp.Body.Close()
+
+	ip, err := bufio.NewReader(resp.Body).ReadString('\n')
+	if err != nil {
+		return "Unknown"
+	}
+	return strings.TrimSpace(ip)
+}
+
+// Start a TCP server
 func startServer() {
 	listener, err := net.Listen("tcp", ":"+listeningPort)
 	if err != nil {
@@ -23,7 +53,12 @@ func startServer() {
 		return
 	}
 	defer listener.Close()
-	fmt.Println("Listening on port", listeningPort)
+
+	localIP := getLocalIP()
+	publicIP := getPublicIP()
+	fmt.Println("🔥 Server started!")
+	fmt.Println("📡 Local Address:  " + localIP + ":" + listeningPort)
+	fmt.Println("🌍 Public Address: " + publicIP + ":" + listeningPort)
 
 	for {
 		conn, err := listener.Accept()
@@ -42,7 +77,7 @@ func startServer() {
 	}
 }
 
-// Handle messages from a peer
+// Handle peer messages
 func handlePeer(conn net.Conn, addr string) {
 	defer func() {
 		mutex.Lock()
@@ -101,7 +136,7 @@ func showPeers() {
 }
 
 func main() {
-	go startServer() // Start server in background
+	go startServer() // Start the server in background
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
